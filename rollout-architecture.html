@@ -1,0 +1,294 @@
+<meta charset="utf-8">
+<title>Rolling Update Simulator — Architecture</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg:            #f9f9f7;
+    --surface:       #fcfcfb;
+    --surface-raise: #ffffff;
+    --border:        rgba(11,11,11,0.10);
+    --border-strong: rgba(11,11,11,0.20);
+    --ink:           #0b0b0b;
+    --ink-2:         #52514e;
+    --ink-muted:     #898781;
+    --blue:          #2a78d6;
+    --orange:        #eb6834;
+    --good:          #0ca30c;
+    --warning:       #fab219;
+    --serious:       #ec835a;
+    --good-ink:      #0b0b0b; --warning-ink: #0b0b0b; --serious-ink: #0b0b0b;
+    --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 8px 24px -12px rgba(11,11,11,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --bg: #0d0d0d; --surface: #16161a; --surface-raise: #1c1c21;
+      --border: rgba(255,255,255,0.10); --border-strong: rgba(255,255,255,0.22);
+      --ink: #ffffff; --ink-2: #c3c2b7; --ink-muted: #8b8a84;
+      --blue: #3987e5; --orange: #d95926;
+      --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
+      --good-ink: #06210a; --warning-ink: #241a00; --serious-ink: #26150c;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0d0d0d; --surface: #16161a; --surface-raise: #1c1c21;
+    --border: rgba(255,255,255,0.10); --border-strong: rgba(255,255,255,0.22);
+    --ink: #ffffff; --ink-2: #c3c2b7; --ink-muted: #8b8a84;
+    --blue: #3987e5; --orange: #d95926;
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a;
+    --good-ink: #06210a; --warning-ink: #241a00; --serious-ink: #26150c;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f9f9f7; --surface: #fcfcfb; --surface-raise: #ffffff;
+    --border: rgba(11,11,11,0.10); --border-strong: rgba(11,11,11,0.20);
+    --ink: #0b0b0b; --ink-2: #52514e; --ink-muted: #898781;
+    --blue: #2a78d6; --orange: #eb6834;
+    --good-ink: #0b0b0b; --warning-ink: #0b0b0b; --serious-ink: #0b0b0b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace; }
+  code { font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace; background: var(--surface-raise); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; font-size: 0.9em; }
+
+  .page { max-width: 1180px; margin: 0 auto; padding: 40px 28px 60px; display: flex; flex-direction: column; gap: 22px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue); }
+  h1 { margin: 4px 0 0; font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
+  .dek { margin: 6px 0 0; max-width: 72ch; color: var(--ink-2); }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; box-shadow: var(--shadow); }
+  .panel h2 { margin: 0 0 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em; }
+  .panel .sub { margin: 0 0 14px; font-size: 12.5px; color: var(--ink-muted); }
+
+  svg.diagram { width: 100%; height: auto; display: block; overflow: visible; }
+
+  .legend-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 4px; }
+  .legend-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; background: var(--surface-raise); }
+  .legend-card .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+  .legend-card .name { font-size: 13px; font-weight: 700; }
+  .legend-card p { margin: 5px 0 0; font-size: 12px; color: var(--ink-2); }
+
+  footer.credit { text-align: center; font-size: 12px; color: var(--ink-muted); }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">Rollout engine — architecture</div>
+    <h1>How it fits together</h1>
+    <p class="dek">
+      Two objects and a loop. <code>RolloutEngine</code> is a pure function of fleet state — it never touches
+      infrastructure. <code>Cluster</code> owns the infrastructure and knows nothing about rollout policy.
+      A driver alternates between them once per tick until the engine reports a terminal status.
+    </p>
+  </header>
+
+  <section class="panel">
+    <h2>Runtime flow — one tick</h2>
+    <p class="sub"><code>rolling_update_simulator/simulator.py:run()</code> (Python) and <code>simulate()</code> (JS port) both implement this exact cycle.</p>
+    <svg class="diagram" id="flow" viewBox="0 0 1160 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Architecture flow diagram"></svg>
+  </section>
+
+  <section class="panel">
+    <h2>Engine status — state machine</h2>
+    <p class="sub">Owned entirely by <code>RolloutEngine.status</code>; <code>Cluster</code> has no notion of it.</p>
+    <svg class="diagram" id="states" viewBox="0 0 1160 220" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Rollout status state machine"></svg>
+  </section>
+
+  <section class="panel">
+    <h2>Where each rollout rule lives</h2>
+    <div class="legend-grid">
+      <div class="legend-card">
+        <div class="name"><span class="dot" style="background:var(--blue)"></span>Rule 1 — resources</div>
+        <p>Enforced in <code>_plan_creates</code>: every CREATE is capped by remaining <code>max_surge</code> / <code>resource_capacity</code> headroom before it's issued.</p>
+      </div>
+      <div class="legend-card">
+        <div class="name"><span class="dot" style="background:var(--orange)"></span>Rule 2 — availability</div>
+        <p>Enforced in <code>_plan_terminates</code>: a READY instance is only terminated if the fleet has spare ready capacity above <code>min_available</code>.</p>
+      </div>
+      <div class="legend-card">
+        <div class="name"><span class="dot" style="background:var(--serious)"></span>Rule 3 — unreachable state</div>
+        <p><code>record_failure</code> counts new-version health-check failures; past tolerance, <code>plan()</code> flips target back to the old version.</p>
+      </div>
+      <div class="legend-card">
+        <div class="name"><span class="dot" style="background:var(--good)"></span>Rule 4 — maintainability</div>
+        <p>Planning (<code>engine.py</code>), lifecycle simulation (<code>cluster.py</code>), and orchestration (<code>simulator.py</code>) are separate, independently testable modules.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="credit">rolling_update_simulator/{engine,cluster,simulator}.py</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  function el(tag, attrs, children) {
+    attrs = attrs || {};
+    var ns = "http://www.w3.org/2000/svg";
+    var node = document.createElementNS(ns, tag);
+    Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
+    (children || []).forEach(function (c) { node.appendChild(c); });
+    return node;
+  }
+  function text(x, y, str, attrs) {
+    attrs = Object.assign({ x: x, y: y }, attrs || {});
+    var t = el("text", attrs);
+    t.textContent = str;
+    return t;
+  }
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function box(x, y, w, h, opts) {
+    opts = opts || {};
+    var g = el("g", {});
+    g.appendChild(el("rect", {
+      x: x, y: y, width: w, height: h, rx: opts.rx || 12,
+      fill: opts.fill || "var(--surface-raise)",
+      stroke: opts.stroke || "var(--border-strong)",
+      "stroke-width": opts.strokeWidth || 1.5,
+      "stroke-dasharray": opts.dashed ? "5 4" : null
+    }));
+    return g;
+  }
+
+  function arrowMarker(id, color) {
+    return el("marker", {
+      id: id, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse"
+    }, [el("path", { d: "M0,0 L10,5 L0,10 Z", fill: color })]);
+  }
+
+  /* ============================== Flow diagram ============================== */
+  function renderFlow() {
+    var svg = document.getElementById("flow");
+    var defs = el("defs", {}, [
+      arrowMarker("arrow-ink", "var(--ink-muted)"),
+      arrowMarker("arrow-blue", "var(--blue)"),
+      arrowMarker("arrow-orange", "var(--orange)")
+    ]);
+    svg.appendChild(defs);
+
+    // ---- Config node ----
+    var cfgX = 40, cfgY = 30, cfgW = 230, cfgH = 130;
+    svg.appendChild(box(cfgX, cfgY, cfgW, cfgH, { fill: "var(--surface)" }));
+    svg.appendChild(text(cfgX + 16, cfgY + 26, "RolloutConfig", { fill: "var(--ink)", "font-size": 15, "font-weight": 700, "font-family": "inherit" }));
+    ["desired_replicas", "max_surge", "max_unavailable", "resource_capacity", "max_new_version_failures"].forEach(function (p, i) {
+      svg.appendChild(text(cfgX + 16, cfgY + 50 + i * 17, p, { fill: "var(--ink-2)", "font-size": 11.5, "font-family": "ui-monospace, monospace" }));
+    });
+
+    // ---- Engine node ----
+    var enX = 40, enY = 210, enW = 430, enH = 270;
+    svg.appendChild(box(enX, enY, enW, enH, { fill: "var(--surface)", stroke: "var(--blue)" }));
+    svg.appendChild(text(enX + 18, enY + 30, "RolloutEngine", { fill: "var(--blue)", "font-size": 17, "font-weight": 800, "font-family": "inherit" }));
+    svg.appendChild(text(enX + 18, enY + 50, "pure decision-maker — no infra access", { fill: "var(--ink-muted)", "font-size": 11.5 }));
+
+    var methods = [
+      ["plan(instances)", "→ Action[]  (rules 1 & 2)"],
+      ["record_failure(instance)", "→ maybe flips status  (rule 3)"],
+      ["_plan_creates()", "cap by max_surge / resource_capacity"],
+      ["_plan_terminates()", "cap by min_available"],
+      ["_is_settled()", "→ COMPLETE / ROLLED_BACK"]
+    ];
+    methods.forEach(function (m, i) {
+      var my = enY + 84 + i * 34;
+      svg.appendChild(el("rect", { x: enX + 16, y: my - 16, width: enW - 32, height: 28, rx: 6, fill: "var(--surface-raise)", stroke: "var(--border)" }));
+      svg.appendChild(text(enX + 26, my + 3, m[0], { fill: "var(--ink)", "font-size": 12, "font-weight": 600, "font-family": "ui-monospace, monospace" }));
+      svg.appendChild(text(enX + enW - 26, my + 3, m[1], { fill: "var(--ink-muted)", "font-size": 10.5, "text-anchor": "end" }));
+    });
+
+    // ---- Cluster node ----
+    var clX = 690, clY = 210, clW = 430, clH = 270;
+    svg.appendChild(box(clX, clY, clW, clH, { fill: "var(--surface)", stroke: "var(--orange)" }));
+    svg.appendChild(text(clX + 18, clY + 30, "Cluster", { fill: "var(--orange)", "font-size": 17, "font-weight": 800, "font-family": "inherit" }));
+    svg.appendChild(text(clX + 18, clY + 50, "simulated infra — no rollout policy", { fill: "var(--ink-muted)", "font-size": 11.5 }));
+
+    var clMethods = [
+      ["apply(actions)", "CREATE → new Instance / TERMINATE → mark instance"],
+      ["tick()", "STARTING→READY|FAILED, TERMINATING→TERMINATED"],
+      ["health_check(instance)", "pluggable — real fault injection point"],
+      ["active_count() / ready_count()", "read by plan() next tick"]
+    ];
+    clMethods.forEach(function (m, i) {
+      var my = clY + 84 + i * 34;
+      svg.appendChild(el("rect", { x: clX + 16, y: my - 16, width: clW - 32, height: 28, rx: 6, fill: "var(--surface-raise)", stroke: "var(--border)" }));
+      svg.appendChild(text(clX + 26, my + 3, m[0], { fill: "var(--ink)", "font-size": 12, "font-weight": 600, "font-family": "ui-monospace, monospace" }));
+      svg.appendChild(text(clX + clW - 26, my + 3, m[1], { fill: "var(--ink-muted)", "font-size": 10, "text-anchor": "end" }));
+    });
+
+    // ---- Config -> Engine arrow ----
+    svg.appendChild(el("path", { d: "M" + (cfgX + cfgW / 2) + "," + (cfgY + cfgH) + " L" + (cfgX + cfgW / 2) + "," + (enY - 8), stroke: "var(--ink-muted)", "stroke-width": 2, fill: "none", "marker-end": "url(#arrow-ink)" }));
+    svg.appendChild(text(cfgX + cfgW / 2 + 10, cfgY + cfgH + 30, "constructs", { fill: "var(--ink-muted)", "font-size": 11, "font-style": "italic" }));
+
+    // ---- Engine -> Cluster: plan() actions ----
+    var midY1 = enY + 40;
+    svg.appendChild(el("path", {
+      d: "M" + (enX + enW) + "," + midY1 + " L" + (clX) + "," + midY1,
+      stroke: "var(--blue)", "stroke-width": 2.5, fill: "none", "marker-end": "url(#arrow-blue)"
+    }));
+    svg.appendChild(text((enX + enW + clX) / 2, midY1 - 10, "actions[]  (CREATE / TERMINATE)", { fill: "var(--blue)", "font-size": 11.5, "text-anchor": "middle", "font-weight": 600, "font-family": "ui-monospace, monospace" }));
+
+    // ---- Cluster -> Engine: instances[] (feeds next plan) ----
+    var midY2 = enY + enH - 30;
+    svg.appendChild(el("path", {
+      d: "M" + clX + "," + midY2 + " L" + (enX + enW) + "," + midY2,
+      stroke: "var(--orange)", "stroke-width": 2.5, fill: "none", "marker-end": "url(#arrow-orange)"
+    }));
+    svg.appendChild(text((enX + enW + clX) / 2, midY2 + 22, "instances[] + newly_failed[]", { fill: "var(--orange)", "font-size": 11.5, "text-anchor": "middle", "font-weight": 600, "font-family": "ui-monospace, monospace" }));
+
+    // ---- Loop-back arc labeled "next tick" ----
+    var arcY = enY + enH + 50;
+    svg.appendChild(el("path", {
+      d: "M" + (clX + clW / 2) + "," + (clY + clH) + " C " + (clX + clW / 2) + "," + arcY + " " + (enX + enW / 2) + "," + arcY + " " + (enX + enW / 2) + "," + (enY + enH),
+      stroke: "var(--ink-muted)", "stroke-width": 2, fill: "none", "stroke-dasharray": "6 5", "marker-end": "url(#arrow-ink)"
+    }));
+    svg.appendChild(text((enX + enW / 2 + clX + clW / 2) / 2, arcY + 5, "loop until COMPLETE / ROLLED_BACK — next tick", { fill: "var(--ink-muted)", "font-size": 12, "text-anchor": "middle", "font-style": "italic" }));
+  }
+
+  /* ============================== State machine ============================== */
+  function renderStates() {
+    var svg = document.getElementById("states");
+    var defs = el("defs", {}, [arrowMarker("arrow-ink2", "var(--ink-muted)")]);
+    svg.appendChild(defs);
+
+    var nodes = [
+      { key: "in_progress", label: "IN_PROGRESS", sub: "advancing to new_version", color: "var(--warning)", ink: "var(--warning-ink)" },
+      { key: "complete", label: "COMPLETE", sub: "desired state reached", color: "var(--good)", ink: "var(--good-ink)" },
+      { key: "rolling_back", label: "ROLLING_BACK", sub: "reversing to old_version", color: "var(--serious)", ink: "var(--serious-ink)" },
+      { key: "rolled_back", label: "ROLLED_BACK", sub: "safely reverted, fully available", color: "var(--blue)", ink: "#ffffff" }
+    ];
+    var w = 230, h = 90, y1 = 20, y2 = 130;
+    var xs = [40, 480, 40, 480];
+    var ys = [y1, y1, y2, y2];
+
+    nodes.forEach(function (n, i) {
+      var x = xs[i], y = ys[i];
+      svg.appendChild(el("rect", { x: x, y: y, width: w, height: h, rx: 12, fill: n.color }));
+      svg.appendChild(text(x + 18, y + 32, n.label, { fill: n.ink, "font-size": 15, "font-weight": 800, "font-family": "ui-monospace, monospace" }));
+      svg.appendChild(text(x + 18, y + 54, n.sub, { fill: n.ink, opacity: 0.85, "font-size": 11.5 }));
+    });
+
+    // in_progress -> complete (settled forward)
+    svg.appendChild(el("path", { d: "M" + (xs[0] + w) + "," + (y1 + h / 2) + " L" + xs[1] + "," + (y1 + h / 2), stroke: "var(--ink-muted)", "stroke-width": 2, fill: "none", "marker-end": "url(#arrow-ink2)" }));
+    svg.appendChild(text((xs[0] + w + xs[1]) / 2, y1 + h / 2 - 10, "settled", { fill: "var(--ink-muted)", "font-size": 11.5, "text-anchor": "middle", "font-style": "italic" }));
+
+    // in_progress -> rolling_back (failures exceed tolerance)
+    svg.appendChild(el("path", { d: "M" + (xs[0] + w / 2) + "," + (y1 + h) + " L" + (xs[2] + w / 2) + "," + y2, stroke: "var(--ink-muted)", "stroke-width": 2, fill: "none", "marker-end": "url(#arrow-ink2)" }));
+    svg.appendChild(text(xs[0] + w / 2 + 12, (y1 + h + y2) / 2 + 4, "failures > max_new_version_failures", { fill: "var(--ink-muted)", "font-size": 11, "font-style": "italic" }));
+
+    // rolling_back -> rolled_back (settled reverse)
+    svg.appendChild(el("path", { d: "M" + (xs[2] + w) + "," + (y2 + h / 2) + " L" + xs[3] + "," + (y2 + h / 2), stroke: "var(--ink-muted)", "stroke-width": 2, fill: "none", "marker-end": "url(#arrow-ink2)" }));
+    svg.appendChild(text((xs[2] + w + xs[3]) / 2, y2 + h / 2 - 10, "settled", { fill: "var(--ink-muted)", "font-size": 11.5, "text-anchor": "middle", "font-style": "italic" }));
+  }
+
+  renderFlow();
+  renderStates();
+})();
+</script>

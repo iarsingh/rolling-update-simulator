@@ -1,0 +1,1191 @@
+<meta charset="utf-8">
+<title>Rolling Update Simulator</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg:            #f9f9f7;
+    --surface:       #fcfcfb;
+    --surface-raise: #ffffff;
+    --border:        rgba(11,11,11,0.10);
+    --border-strong: rgba(11,11,11,0.16);
+    --ink:           #0b0b0b;
+    --ink-2:         #52514e;
+    --ink-muted:     #898781;
+    --blue:          #2a78d6;
+    --orange:        #eb6834;
+    --good:          #0ca30c;
+    --warning:       #fab219;
+    --serious:       #ec835a;
+    --critical:      #d03b3b;
+    --good-ink:      #0b0b0b;
+    --warning-ink:   #0b0b0b;
+    --serious-ink:   #0b0b0b;
+    --critical-ink:  #ffffff;
+    --shadow: 0 1px 2px rgba(11,11,11,0.06), 0 8px 24px -12px rgba(11,11,11,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --bg:            #0d0d0d;
+      --surface:       #16161a;
+      --surface-raise: #1c1c21;
+      --border:        rgba(255,255,255,0.10);
+      --border-strong: rgba(255,255,255,0.18);
+      --ink:           #ffffff;
+      --ink-2:         #c3c2b7;
+      --ink-muted:     #8b8a84;
+      --blue:          #3987e5;
+      --orange:        #d95926;
+      --good:          #0ca30c;
+      --warning:       #fab219;
+      --serious:       #ec835a;
+      --critical:      #e66767;
+      --good-ink:      #06210a;
+      --warning-ink:   #241a00;
+      --serious-ink:   #26150c;
+      --critical-ink:  #1a0000;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg:            #0d0d0d;
+    --surface:       #16161a;
+    --surface-raise: #1c1c21;
+    --border:        rgba(255,255,255,0.10);
+    --border-strong: rgba(255,255,255,0.18);
+    --ink:           #ffffff;
+    --ink-2:         #c3c2b7;
+    --ink-muted:     #8b8a84;
+    --blue:          #3987e5;
+    --orange:        #d95926;
+    --good:          #0ca30c;
+    --warning:       #fab219;
+    --serious:       #ec835a;
+    --critical:      #e66767;
+    --good-ink:      #06210a;
+    --warning-ink:   #241a00;
+    --serious-ink:   #26150c;
+    --critical-ink:  #1a0000;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:            #f9f9f7;
+    --surface:       #fcfcfb;
+    --surface-raise: #ffffff;
+    --border:        rgba(11,11,11,0.10);
+    --border-strong: rgba(11,11,11,0.16);
+    --ink:           #0b0b0b;
+    --ink-2:         #52514e;
+    --ink-muted:     #898781;
+    --blue:          #2a78d6;
+    --orange:        #eb6834;
+    --good-ink:      #0b0b0b;
+    --warning-ink:   #0b0b0b;
+    --serious-ink:   #0b0b0b;
+    --critical-ink:  #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .mono {
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  a { color: var(--blue); }
+  button { font: inherit; color: inherit; }
+  ::selection { background: color-mix(in srgb, var(--blue) 30%, transparent); }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 28px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  /* ---------- Header ---------- */
+  header.top {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.3rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .dek {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--ink-2);
+    font-size: 15px;
+  }
+  .dek code {
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    background: var(--surface-raise);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 5px;
+    font-size: 0.9em;
+  }
+
+  /* ---------- Scenario tabs + config chips ---------- */
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .tabs {
+    display: inline-flex;
+    padding: 3px;
+    background: var(--surface-raise);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    gap: 2px;
+  }
+  .tab {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--ink-2);
+    padding: 8px 14px;
+    border-radius: 7px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active {
+    background: var(--blue);
+    color: #ffffff;
+  }
+  .tab:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    background: var(--surface-raise);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 10px 5px 11px;
+    font-size: 12px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .chip b {
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  /* ---------- Status strip ---------- */
+  .status-strip {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+  }
+  .tick-readout {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 84px;
+  }
+  .tick-readout .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-muted); }
+  .tick-readout .value { font-size: 28px; font-weight: 700; line-height: 1; }
+  .divider { width: 1px; align-self: stretch; background: var(--border); }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .badge.st-in_progress   { background: color-mix(in srgb, var(--warning) 22%, var(--surface)); color: color-mix(in srgb, var(--warning) 78%, var(--ink)); }
+  .badge.st-rolling_back  { background: color-mix(in srgb, var(--serious) 22%, var(--surface)); color: color-mix(in srgb, var(--serious) 82%, var(--ink)); }
+  .badge.st-complete      { background: color-mix(in srgb, var(--good) 20%, var(--surface));    color: color-mix(in srgb, var(--good) 60%, var(--ink)); }
+  .badge.st-rolled_back   { background: color-mix(in srgb, var(--blue) 20%, var(--surface));    color: color-mix(in srgb, var(--blue) 55%, var(--ink)); }
+  .status-strip .note { color: var(--ink-2); font-size: 13px; flex: 1; min-width: 200px; }
+
+  .transport {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .transport button {
+    width: 34px; height: 34px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface-raise);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.05s ease;
+  }
+  .transport button:hover { background: color-mix(in srgb, var(--blue) 10%, var(--surface-raise)); }
+  .transport button:active { transform: scale(0.94); }
+  .transport button.primary {
+    background: var(--blue);
+    border-color: var(--blue);
+    color: #fff;
+    width: auto;
+    padding: 0 16px;
+    gap: 7px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+  .transport button.primary:hover { background: color-mix(in srgb, var(--blue) 85%, black); }
+  .transport button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .transport svg { width: 15px; height: 15px; }
+
+  .scrubber-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 2px;
+  }
+  .scrubber-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--blue);
+  }
+  .scrubber-row .tick-max { font-size: 12px; color: var(--ink-muted); white-space: nowrap; }
+
+  /* ---------- Main grid ---------- */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .panel h2 {
+    margin: 0 0 3px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .panel .sub { margin: 0 0 16px; font-size: 12.5px; color: var(--ink-muted); }
+
+  /* ---------- Fleet lanes ---------- */
+  .lane { margin-bottom: 18px; }
+  .lane:last-child { margin-bottom: 0; }
+  .lane-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 9px;
+  }
+  .lane-head .v-tag {
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-raise);
+  }
+  .lane-head .lane-summary { font-size: 12px; color: var(--ink-muted); }
+  .lane-slots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-height: 40px;
+    align-content: flex-start;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border-strong);
+    animation: pop 0.28s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .pill .glyph { font-size: 11px; }
+  .pill.s-ready       { background: var(--good);    color: var(--good-ink); }
+  .pill.s-starting    { background: var(--warning); color: var(--warning-ink); }
+  .pill.s-terminating { background: var(--serious); color: var(--serious-ink); }
+  .pill-ghost {
+    width: 46px; height: 27px;
+    border-radius: 8px;
+    border: 1px dashed var(--border-strong);
+  }
+  @keyframes pop {
+    from { transform: scale(0.7); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pill { animation: none; }
+  }
+
+  /* ---------- Rules panel ---------- */
+  .rule {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+  .rule:first-of-type { border-top: none; padding-top: 0; }
+  .rule .check {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+    background: color-mix(in srgb, var(--good) 20%, var(--surface));
+    color: color-mix(in srgb, var(--good) 55%, var(--ink));
+  }
+  .rule .check svg { width: 12px; height: 12px; }
+  .rule .body { flex: 1; }
+  .rule .title { font-size: 13.5px; font-weight: 700; margin-bottom: 2px; }
+  .rule .meter {
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .rule .meter .mono { color: var(--ink); font-weight: 600; }
+  .bar {
+    position: relative;
+    height: 6px;
+    background: var(--border);
+    border-radius: 4px;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .bar > span {
+    position: absolute; inset: 0 auto 0 0;
+    border-radius: 4px;
+    background: var(--blue);
+    transition: width 0.25s ease;
+  }
+  @media (prefers-reduced-motion: reduce) { .bar > span { transition: none; } }
+  .bar .floor-mark {
+    position: absolute; top: -3px; bottom: -3px; width: 2px;
+    background: var(--ink);
+    opacity: 0.5;
+  }
+
+  /* ---------- Chart ---------- */
+  .chart-wrap { position: relative; }
+  svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    margin-top: 10px;
+    font-size: 12px; color: var(--ink-2);
+  }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 14px; height: 3px; border-radius: 2px; }
+  .legend .swatch.dashed {
+    height: 0; border-top: 2px dashed var(--ink-muted); width: 14px;
+  }
+  .crosshair-tip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--surface-raise);
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .crosshair-tip.show { opacity: 1; }
+  .crosshair-tip .row { display: flex; justify-content: space-between; gap: 14px; }
+  .crosshair-tip .row + .row { margin-top: 2px; }
+
+  details.data-table { margin-top: 12px; }
+  details.data-table summary {
+    cursor: pointer;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--blue);
+    list-style: none;
+  }
+  details.data-table summary::-webkit-details-marker { display: none; }
+  details.data-table summary::before { content: "▸ "; }
+  details.data-table[open] summary::before { content: "▾ "; }
+  .table-scroll { overflow-x: auto; margin-top: 8px; }
+  table.data {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12px;
+  }
+  table.data th, table.data td {
+    text-align: right;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  table.data th:first-child, table.data td:first-child { text-align: left; font-family: system-ui, sans-serif; }
+  table.data th { color: var(--ink-muted); font-weight: 600; }
+
+  /* ---------- Action log ---------- */
+  .log-panel { grid-column: 1 / -1; }
+  .log-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+  }
+  .log-row {
+    display: grid;
+    grid-template-columns: 52px 96px 1fr;
+    gap: 12px;
+    padding: 7px 2px;
+    font-size: 12.5px;
+    border-bottom: 1px solid var(--border);
+    align-items: baseline;
+  }
+  .log-row.current { background: color-mix(in srgb, var(--blue) 8%, transparent); }
+  .log-row .t { color: var(--ink-muted); }
+  .log-row .s { font-weight: 600; }
+  .log-row .a { color: var(--ink-2); }
+  .log-row .a .create { color: color-mix(in srgb, var(--good) 65%, var(--ink)); }
+  .log-row .a .terminate { color: color-mix(in srgb, var(--serious) 70%, var(--ink)); }
+  .log-row .a .warn { color: color-mix(in srgb, var(--critical) 75%, var(--ink)); font-weight: 600; }
+
+  footer.credit {
+    text-align: center;
+    font-size: 12px;
+    color: var(--ink-muted);
+  }
+  footer.credit code {
+    font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+</style>
+
+<div class="page">
+
+  <header class="top">
+    <div class="eyebrow">Rollout engine — live demo</div>
+    <h1>Rolling Update Simulator</h1>
+    <p class="dek">
+      The exact planning algorithm from <code>rolling_update_simulator/engine.py</code>, ported line-for-line
+      to JavaScript and run in your browser. Watch it surge new instances, drain old ones, and — when the
+      new version can't pass its health check — safely reverse course.
+    </p>
+  </header>
+
+  <div class="controls-row">
+    <div class="tabs" role="tablist" aria-label="Scenario">
+      <button class="tab active" data-scenario="healthy" role="tab" aria-selected="true">Healthy rollout</button>
+      <button class="tab" data-scenario="unhealthy" role="tab" aria-selected="false">v2 fails health check</button>
+    </div>
+    <div class="chips" id="config-chips"></div>
+  </div>
+
+  <div class="status-strip">
+    <div class="tick-readout">
+      <span class="label">Tick</span>
+      <span class="value mono" id="tick-value">00</span>
+    </div>
+    <div class="divider"></div>
+    <span class="badge" id="status-badge"><span class="dot"></span><span id="status-text">—</span></span>
+    <span class="note" id="status-note"></span>
+    <div class="transport">
+      <button id="btn-reset" title="Reset" aria-label="Reset">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+      <button id="btn-back" title="Step back" aria-label="Step back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20 9 12l10-8v16Z"/><path d="M5 19V5"/></svg>
+      </button>
+      <button id="btn-play" class="primary" title="Play" aria-label="Play">
+        <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+        <span id="play-label">Play</span>
+      </button>
+      <button id="btn-fwd" title="Step forward" aria-label="Step forward">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8V4Z"/><path d="M19 5v14"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="scrubber-row">
+    <input type="range" id="scrubber" min="0" max="0" value="0" step="1" aria-label="Tick scrubber">
+    <span class="tick-max mono" id="tick-max">/ 00</span>
+  </div>
+
+  <div class="main-grid">
+    <section class="panel">
+      <h2>Fleet</h2>
+      <p class="sub">Every active instance, grouped by version. Color is health/lifecycle state, not identity.</p>
+      <div class="lane">
+        <div class="lane-head">
+          <span class="v-tag" id="v1-tag">v1</span>
+          <span class="lane-summary" id="v1-summary"></span>
+        </div>
+        <div class="lane-slots" id="v1-slots"></div>
+      </div>
+      <div class="lane">
+        <div class="lane-head">
+          <span class="v-tag" id="v2-tag">v2</span>
+          <span class="lane-summary" id="v2-summary"></span>
+        </div>
+        <div class="lane-slots" id="v2-slots"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Invariants</h2>
+      <p class="sub">Checked after every single action, for every tick simulated so far.</p>
+
+      <div class="rule">
+        <span class="check" id="rule1-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+        <div class="body">
+          <div class="title">Never exceeds available resources</div>
+          <div class="meter">Active <span class="mono" id="rule1-value">0</span> of <span class="mono" id="rule1-max">0</span> capacity — worst-case so far: <span class="mono" id="rule1-worst">0</span></div>
+          <div class="bar"><span id="rule1-bar"></span></div>
+        </div>
+      </div>
+
+      <div class="rule">
+        <span class="check" id="rule2-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+        <div class="body">
+          <div class="title">Stays available at ≥ defined capacity</div>
+          <div class="meter">Ready <span class="mono" id="rule2-value">0</span> — floor <span class="mono" id="rule2-min">0</span> — worst-case so far: <span class="mono" id="rule2-worst">0</span></div>
+          <div class="bar"><span id="rule2-bar" style="background:var(--good)"></span><span class="floor-mark" id="rule2-floor-mark"></span></div>
+        </div>
+      </div>
+
+      <div class="rule">
+        <span class="check" id="rule3-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+        <div class="body">
+          <div class="title">Handles an unreachable desired state</div>
+          <div class="meter" id="rule3-note">Rollout progressing normally.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" style="grid-column: 1 / -1;">
+      <h2>Active &amp; ready over time</h2>
+      <p class="sub">Dashed lines are the two hard limits — surge/capacity ceiling above, availability floor below.</p>
+      <div class="chart-wrap">
+        <svg class="chart" id="chart" viewBox="0 0 640 220" preserveAspectRatio="none" role="img" aria-label="Active and ready instance counts by tick"></svg>
+        <div class="crosshair-tip" id="crosshair-tip"></div>
+      </div>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--blue)"></span>Active</span>
+        <span class="item"><span class="swatch" style="background:var(--orange)"></span>Ready</span>
+        <span class="item"><span class="swatch dashed"></span>Ceiling / floor</span>
+      </div>
+      <details class="data-table">
+        <summary>View data as table</summary>
+        <div class="table-scroll">
+          <table class="data" id="data-table">
+            <thead><tr><th>Status</th><th>Tick</th><th>Active</th><th>Ready</th></tr></thead>
+            <tbody id="data-table-body"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <section class="panel log-panel">
+      <h2>Action log</h2>
+      <p class="sub">What the engine decided, tick by tick.</p>
+      <div class="log-list" id="log-list"></div>
+    </section>
+  </div>
+
+  <footer class="credit">
+    Faithful JS port of <code class="mono">RolloutEngine</code> / <code class="mono">Cluster</code> from the Python package — same rules, same output.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================== Engine port ==============================
+     Mirrors rolling_update_simulator/{models,engine,cluster}.py exactly. */
+
+  const InstanceState = { STARTING: "starting", READY: "ready", TERMINATING: "terminating", TERMINATED: "terminated", FAILED: "failed" };
+  const RolloutStatus = { IN_PROGRESS: "in_progress", ROLLING_BACK: "rolling_back", COMPLETE: "complete", ROLLED_BACK: "rolled_back" };
+  const ActionType = { CREATE: "create", TERMINATE: "terminate" };
+
+  let idCounter = 1;
+  function makeInstance(version, state) {
+    return { id: idCounter++, version: version, state: state || InstanceState.STARTING, ticksInState: 0 };
+  }
+  function isActive(i) { return i.state === InstanceState.STARTING || i.state === InstanceState.READY || i.state === InstanceState.TERMINATING; }
+  function isReady(i) { return i.state === InstanceState.READY; }
+
+  function RolloutConfig(opts) {
+    this.desiredReplicas = opts.desiredReplicas;
+    this.maxSurge = opts.maxSurge === undefined ? 1 : opts.maxSurge;
+    this.maxUnavailable = opts.maxUnavailable === undefined ? 0 : opts.maxUnavailable;
+    this.resourceCapacity = opts.resourceCapacity === undefined ? null : opts.resourceCapacity;
+    this.maxNewVersionFailures = opts.maxNewVersionFailures === undefined ? 3 : opts.maxNewVersionFailures;
+
+    if (this.desiredReplicas <= 0) throw new Error("desiredReplicas must be positive");
+    if (this.maxSurge < 0 || this.maxUnavailable < 0) throw new Error("maxSurge and maxUnavailable must be non-negative");
+    if (this.maxSurge === 0 && this.maxUnavailable === 0) throw new Error("maxSurge and maxUnavailable cannot both be 0");
+    if (this.resourceCapacity !== null && this.resourceCapacity < this.desiredReplicas) throw new Error("resourceCapacity must be at least desiredReplicas");
+  }
+  Object.defineProperty(RolloutConfig.prototype, "minAvailable", { get: function () { return Math.max(this.desiredReplicas - this.maxUnavailable, 0); } });
+  Object.defineProperty(RolloutConfig.prototype, "maxActive", { get: function () { return this.desiredReplicas + this.maxSurge; } });
+
+  function RolloutEngine(config, oldVersion, newVersion) {
+    this.config = config;
+    this.oldVersion = oldVersion;
+    this.newVersion = newVersion;
+    this.status = RolloutStatus.IN_PROGRESS;
+    this.failureCount = 0;
+  }
+  RolloutEngine.prototype.recordFailure = function (instance) {
+    if (instance.version !== this.newVersion || this.status !== RolloutStatus.IN_PROGRESS) return;
+    this.failureCount++;
+    if (this.failureCount > this.config.maxNewVersionFailures) this.status = RolloutStatus.ROLLING_BACK;
+  };
+  RolloutEngine.prototype.plan = function (instances) {
+    if (this.status === RolloutStatus.COMPLETE || this.status === RolloutStatus.ROLLED_BACK) return [];
+    const rollingBack = this.status === RolloutStatus.ROLLING_BACK;
+    const targetVersion = rollingBack ? this.oldVersion : this.newVersion;
+    const replacementVersion = rollingBack ? this.newVersion : this.oldVersion;
+
+    const creates = this._planCreates(instances, targetVersion);
+    const projected = instances.concat(creates.map(function () { return makeInstance(targetVersion, InstanceState.STARTING); }));
+    const terminates = this._planTerminates(projected, replacementVersion);
+
+    if (this._isSettled(projected, targetVersion)) {
+      this.status = rollingBack ? RolloutStatus.ROLLED_BACK : RolloutStatus.COMPLETE;
+    }
+    return creates.concat(terminates);
+  };
+  RolloutEngine.prototype._planCreates = function (instances, targetVersion) {
+    const cfg = this.config;
+    const totalActive = instances.filter(isActive).length;
+    const targetActive = instances.filter(function (i) { return isActive(i) && i.version === targetVersion; }).length;
+    let headroom = cfg.maxActive - totalActive;
+    if (cfg.resourceCapacity !== null) headroom = Math.min(headroom, cfg.resourceCapacity - totalActive);
+    const stillNeeded = cfg.desiredReplicas - targetActive;
+    const toCreate = Math.max(Math.min(headroom, stillNeeded), 0);
+    const out = [];
+    for (let n = 0; n < toCreate; n++) out.push({ type: ActionType.CREATE, version: targetVersion });
+    return out;
+  };
+  RolloutEngine.prototype._planTerminates = function (instances, replacementVersion) {
+    const cfg = this.config;
+    const readyCount = instances.filter(isReady).length;
+    const removable = instances.filter(function (i) { return i.version === replacementVersion && i.state === InstanceState.READY; });
+    const spareReady = readyCount - cfg.minAvailable;
+    const toRemove = Math.max(Math.min(spareReady, removable.length), 0);
+    return removable.slice(0, toRemove).map(function (i) { return { type: ActionType.TERMINATE, instanceId: i.id }; });
+  };
+  RolloutEngine.prototype._isSettled = function (instances, targetVersion) {
+    const replacementRemains = instances.some(function (i) { return i.version !== targetVersion && i.state !== InstanceState.TERMINATED; });
+    const targetReady = instances.filter(function (i) { return isReady(i) && i.version === targetVersion; }).length;
+    return !replacementRemains && targetReady >= this.config.desiredReplicas;
+  };
+
+  function Cluster(opts) {
+    opts = opts || {};
+    this.startupTicks = opts.startupTicks === undefined ? 1 : opts.startupTicks;
+    this.shutdownTicks = opts.shutdownTicks === undefined ? 1 : opts.shutdownTicks;
+    this.healthCheck = opts.healthCheck || function () { return true; };
+    this.instances = [];
+  }
+  Cluster.prototype.apply = function (actions) {
+    const self = this;
+    actions.forEach(function (a) {
+      if (a.type === ActionType.CREATE) {
+        self.instances.push(makeInstance(a.version, InstanceState.STARTING));
+      } else {
+        const inst = self.instances.find(function (i) { return i.id === a.instanceId; });
+        if (inst && inst.state !== InstanceState.TERMINATING) {
+          inst.state = InstanceState.TERMINATING;
+          inst.ticksInState = 0;
+        }
+      }
+    });
+  };
+  Cluster.prototype.tick = function () {
+    const newlyFailed = [];
+    this.instances.forEach((inst) => {
+      inst.ticksInState++;
+      if (inst.state === InstanceState.STARTING && inst.ticksInState >= this.startupTicks) {
+        if (this.healthCheck(inst)) { inst.state = InstanceState.READY; }
+        else { inst.state = InstanceState.FAILED; newlyFailed.push(inst); }
+        inst.ticksInState = 0;
+      } else if (inst.state === InstanceState.TERMINATING && inst.ticksInState >= this.shutdownTicks) {
+        inst.state = InstanceState.TERMINATED;
+      }
+    });
+    this.instances = this.instances.filter(function (i) { return i.state !== InstanceState.TERMINATED && i.state !== InstanceState.FAILED; });
+    return newlyFailed;
+  };
+  Cluster.prototype.activeCount = function () { return this.instances.filter(isActive).length; };
+  Cluster.prototype.readyCount = function () { return this.instances.filter(isReady).length; };
+
+  /* ============================== Simulation setup ============================== */
+
+  function seed(cluster, version, count) {
+    for (let n = 0; n < count; n++) cluster.instances.push(makeInstance(version, InstanceState.READY));
+  }
+
+  function simulate(configOpts, oldVersion, newVersion, clusterOpts, seedCount, maxTicks) {
+    idCounter = 1;
+    const config = new RolloutConfig(configOpts);
+    const engine = new RolloutEngine(config, oldVersion, newVersion);
+    const cluster = new Cluster(clusterOpts);
+    seed(cluster, oldVersion, seedCount);
+
+    const frames = [];
+    frames.push({
+      tick: 0, statusBefore: engine.status, statusAfter: engine.status, actions: [],
+      instances: cluster.instances.map(function (i) { return Object.assign({}, i); }),
+      active: cluster.activeCount(), ready: cluster.readyCount(),
+      failureCount: engine.failureCount, newlyFailed: 0
+    });
+
+    let tick = 0;
+    const settled = function () { return engine.status === RolloutStatus.COMPLETE || engine.status === RolloutStatus.ROLLED_BACK; };
+    while (!settled() && tick < maxTicks) {
+      const statusBefore = engine.status;
+      const actions = engine.plan(cluster.instances);
+      cluster.apply(actions);
+      const newlyFailed = cluster.tick();
+      newlyFailed.forEach(function (inst) { engine.recordFailure(inst); });
+      tick++;
+      frames.push({
+        tick: tick, statusBefore: statusBefore, statusAfter: engine.status, actions: actions,
+        instances: cluster.instances.map(function (i) { return Object.assign({}, i); }),
+        active: cluster.activeCount(), ready: cluster.readyCount(),
+        failureCount: engine.failureCount, newlyFailed: newlyFailed.length
+      });
+    }
+    return { frames: frames, config: config, engine: engine };
+  }
+
+  const SCENARIOS = {
+    healthy: {
+      label: "Healthy rollout",
+      note: "v2 passes every health check — the fleet surges, drains, and settles.",
+      build: function () {
+        return simulate(
+          { desiredReplicas: 4, maxSurge: 1, maxUnavailable: 1, resourceCapacity: 6, maxNewVersionFailures: 3 },
+          "v1", "v2", { startupTicks: 2, shutdownTicks: 2, healthCheck: function () { return true; } }, 4, 60
+        );
+      }
+    },
+    unhealthy: {
+      label: "v2 fails health check",
+      note: "v2 never passes its health check — after 2 tolerated failures the engine reverses course.",
+      build: function () {
+        return simulate(
+          { desiredReplicas: 4, maxSurge: 1, maxUnavailable: 1, resourceCapacity: 6, maxNewVersionFailures: 2 },
+          "v1", "v2", { startupTicks: 2, shutdownTicks: 2, healthCheck: function (i) { return i.version !== "v2"; } }, 4, 60
+        );
+      }
+    }
+  };
+
+  /* ============================== Rendering ============================== */
+
+  const state = { scenarioKey: "healthy", run: null, index: 0, playing: false, timer: null };
+
+  const els = {
+    chips: document.getElementById("config-chips"),
+    tickValue: document.getElementById("tick-value"),
+    tickMax: document.getElementById("tick-max"),
+    scrubber: document.getElementById("scrubber"),
+    statusBadge: document.getElementById("status-badge"),
+    statusText: document.getElementById("status-text"),
+    statusNote: document.getElementById("status-note"),
+    v1Tag: document.getElementById("v1-tag"), v2Tag: document.getElementById("v2-tag"),
+    v1Slots: document.getElementById("v1-slots"), v2Slots: document.getElementById("v2-slots"),
+    v1Summary: document.getElementById("v1-summary"), v2Summary: document.getElementById("v2-summary"),
+    rule1Value: document.getElementById("rule1-value"), rule1Max: document.getElementById("rule1-max"),
+    rule1Worst: document.getElementById("rule1-worst"), rule1Bar: document.getElementById("rule1-bar"), rule1Check: document.getElementById("rule1-check"),
+    rule2Value: document.getElementById("rule2-value"), rule2Min: document.getElementById("rule2-min"),
+    rule2Worst: document.getElementById("rule2-worst"), rule2Bar: document.getElementById("rule2-bar"),
+    rule2FloorMark: document.getElementById("rule2-floor-mark"), rule2Check: document.getElementById("rule2-check"),
+    rule3Note: document.getElementById("rule3-note"), rule3Check: document.getElementById("rule3-check"),
+    chart: document.getElementById("chart"), crosshairTip: document.getElementById("crosshair-tip"),
+    tableBody: document.getElementById("data-table-body"),
+    logList: document.getElementById("log-list"),
+    btnPlay: document.getElementById("btn-play"), iconPlay: document.getElementById("icon-play"), iconPause: document.getElementById("icon-pause"), playLabel: document.getElementById("play-label"),
+    btnBack: document.getElementById("btn-back"), btnFwd: document.getElementById("btn-fwd"), btnReset: document.getElementById("btn-reset")
+  };
+
+  const STATE_META = {
+    ready:       { glyph: "✓", cls: "s-ready",       label: "ready" },
+    starting:    { glyph: "∼", cls: "s-starting",    label: "starting" },
+    terminating: { glyph: "↓", cls: "s-terminating", label: "terminating" }
+  };
+
+  function fmtChip(label, value) { return '<span class="chip">' + label + ' <b>' + value + '</b></span>'; }
+
+  function renderChips(config, maxFailures) {
+    els.chips.innerHTML = [
+      fmtChip("desired", config.desiredReplicas),
+      fmtChip("surge", "+" + config.maxSurge),
+      fmtChip("unavailable", config.maxUnavailable),
+      fmtChip("capacity", config.resourceCapacity === null ? "—" : config.resourceCapacity),
+      fmtChip("failures tolerated", config.maxNewVersionFailures)
+    ].join("");
+  }
+
+  function laneCounts(instances, version) {
+    const out = { ready: 0, starting: 0, terminating: 0 };
+    instances.forEach(function (i) {
+      if (i.version !== version) return;
+      if (i.state === InstanceState.READY) out.ready++;
+      else if (i.state === InstanceState.STARTING) out.starting++;
+      else if (i.state === InstanceState.TERMINATING) out.terminating++;
+    });
+    return out;
+  }
+
+  function renderLane(slotsEl, summaryEl, instances, version, desired) {
+    const counts = laneCounts(instances, version);
+    const total = counts.ready + counts.starting + counts.terminating;
+    summaryEl.textContent = counts.ready + " ready · " + counts.starting + " starting · " + counts.terminating + " terminating";
+    let html = "";
+    instances.filter(function (i) { return i.version === version; }).forEach(function (i) {
+      const meta = STATE_META[i.state];
+      if (!meta) return;
+      html += '<span class="pill ' + meta.cls + '"><span class="glyph">' + meta.glyph + '</span>#' + i.id + '</span>';
+    });
+    for (let n = total; n < desired; n++) html += '<span class="pill-ghost" title="empty slot"></span>';
+    slotsEl.innerHTML = html;
+  }
+
+  function renderRules(run, frame) {
+    const cfg = run.config;
+    let worstActive = 0, worstReady = Infinity;
+    for (let n = 0; n <= frame.tick; n++) {
+      worstActive = Math.max(worstActive, run.frames[n].active);
+      worstReady = Math.min(worstReady, run.frames[n].ready);
+    }
+    const ceiling = cfg.resourceCapacity !== null ? Math.min(cfg.maxActive, cfg.resourceCapacity) : cfg.maxActive;
+
+    els.rule1Value.textContent = frame.active;
+    els.rule1Max.textContent = ceiling;
+    els.rule1Worst.textContent = worstActive;
+    els.rule1Bar.style.width = Math.min(100, (frame.active / ceiling) * 100) + "%";
+
+    els.rule2Value.textContent = frame.ready;
+    els.rule2Min.textContent = cfg.minAvailable;
+    els.rule2Worst.textContent = worstReady;
+    const yMax = ceiling + 1;
+    els.rule2Bar.style.width = Math.min(100, (frame.ready / yMax) * 100) + "%";
+    els.rule2FloorMark.style.left = Math.min(100, (cfg.minAvailable / yMax) * 100) + "%";
+
+    const ok1 = worstActive <= ceiling;
+    const ok2 = worstReady >= cfg.minAvailable;
+    setCheckOk(els.rule1Check, ok1);
+    setCheckOk(els.rule2Check, ok2);
+
+    let note, ok3 = true;
+    if (frame.statusAfter === RolloutStatus.ROLLING_BACK || (frame.statusBefore === RolloutStatus.ROLLING_BACK)) {
+      note = "New version exceeded its failure tolerance (" + frame.failureCount + "/" + cfg.maxNewVersionFailures + ") — engine reversed direction and is safely returning the fleet to the old version.";
+    } else if (frame.statusAfter === RolloutStatus.ROLLED_BACK) {
+      note = "Desired state was unreachable. Engine rolled the fleet all the way back to the old version, fully available and within capacity throughout.";
+    } else if (frame.statusAfter === RolloutStatus.COMPLETE) {
+      note = "Desired state reached — 100% on the new version, no rollback needed.";
+    } else {
+      note = "Rollout progressing normally toward the desired state.";
+    }
+    els.rule3Note.textContent = note;
+    setCheckOk(els.rule3Check, ok3);
+  }
+
+  function setCheckOk(el) {
+    el.style.background = "color-mix(in srgb, var(--good) 20%, var(--surface))";
+    el.style.color = "color-mix(in srgb, var(--good) 55%, var(--ink))";
+  }
+
+  function renderStatus(frame) {
+    els.tickValue.textContent = String(frame.tick).padStart(2, "0");
+    const st = frame.statusBefore;
+    els.statusBadge.className = "badge st-" + st;
+    const labelMap = { in_progress: "In progress", rolling_back: "Rolling back", complete: "Complete", rolled_back: "Rolled back" };
+    els.statusText.textContent = labelMap[st] || st;
+
+    let note = "";
+    if (frame.actions.length) {
+      const c = frame.actions.filter(function (a) { return a.type === ActionType.CREATE; }).length;
+      const t = frame.actions.filter(function (a) { return a.type === ActionType.TERMINATE; }).length;
+      const parts = [];
+      if (c) parts.push("creating " + c);
+      if (t) parts.push("terminating " + t);
+      note = "This tick: " + parts.join(", ") + ".";
+    } else if (st === RolloutStatus.COMPLETE || st === RolloutStatus.ROLLED_BACK) {
+      note = "Settled — no further action needed.";
+    }
+    els.statusNote.textContent = note;
+  }
+
+  /* ---- chart ---- */
+  const CHART = { W: 640, H: 220, padL: 30, padR: 66, padT: 14, padB: 24 };
+
+  function chartScales(run) {
+    const cfg = run.config;
+    const yMax = (cfg.resourceCapacity !== null ? Math.max(cfg.maxActive, cfg.resourceCapacity) : cfg.maxActive) + 1;
+    const n = run.frames.length - 1;
+    const x = function (tick) { return CHART.padL + (n === 0 ? 0 : (tick / n) * (CHART.W - CHART.padL - CHART.padR)); };
+    const y = function (v) { return CHART.H - CHART.padB - (v / yMax) * (CHART.H - CHART.padT - CHART.padB); };
+    return { x: x, y: y, yMax: yMax, n: n };
+  }
+
+  function buildPath(frames, x, y, key) {
+    return frames.map(function (f, idx) { return (idx === 0 ? "M" : "L") + x(f.tick).toFixed(1) + "," + y(f[key]).toFixed(1); }).join(" ");
+  }
+
+  function renderChartStatic(run) {
+    const cfg = run.config;
+    const sc = chartScales(run);
+    const svg = els.chart;
+    svg.setAttribute("viewBox", "0 0 " + CHART.W + " " + CHART.H);
+    let parts = [];
+
+    // gridlines (horizontal, every integer up to yMax)
+    for (let v = 0; v <= sc.yMax; v++) {
+      parts.push('<line x1="' + CHART.padL + '" x2="' + (CHART.W - CHART.padR) + '" y1="' + sc.y(v).toFixed(1) + '" y2="' + sc.y(v).toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>');
+    }
+    // reference lines
+    function refLine(value, label) {
+      const yy = sc.y(value).toFixed(1);
+      parts.push('<line x1="' + CHART.padL + '" x2="' + (CHART.W - CHART.padR) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--ink-muted)" stroke-width="1.5" stroke-dasharray="4 3"/>');
+      parts.push('<text x="' + (CHART.W - CHART.padR + 6) + '" y="' + yy + '" dy="3.5" font-size="10" fill="var(--ink-muted)" font-family="ui-monospace, monospace">' + label + '</text>');
+    }
+    refLine(cfg.maxActive, "surge " + cfg.maxActive);
+    if (cfg.resourceCapacity !== null && cfg.resourceCapacity !== cfg.maxActive) refLine(cfg.resourceCapacity, "cap " + cfg.resourceCapacity);
+    refLine(cfg.minAvailable, "floor " + cfg.minAvailable);
+
+    // y axis ticks (numbers)
+    for (let v = 0; v <= sc.yMax; v++) {
+      parts.push('<text x="' + (CHART.padL - 8) + '" y="' + sc.y(v).toFixed(1) + '" dy="3.5" text-anchor="end" font-size="10" fill="var(--ink-muted)" font-family="ui-monospace, monospace">' + v + '</text>');
+    }
+
+    // series lines
+    parts.push('<path d="' + buildPath(run.frames, sc.x, sc.y, "active") + '" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+    parts.push('<path d="' + buildPath(run.frames, sc.x, sc.y, "ready") + '" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>');
+
+    // invisible hit layer for pointer events
+    parts.push('<rect id="chart-hit" x="' + CHART.padL + '" y="0" width="' + (CHART.W - CHART.padL - CHART.padR) + '" height="' + CHART.H + '" fill="transparent"/>');
+
+    // dynamic group (endpoint markers + playhead line), populated by renderChartDynamic
+    parts.push('<g id="chart-dynamic"></g>');
+    parts.push('<g id="chart-crosshair" style="display:none"><line id="crosshair-line" y1="' + CHART.padT + '" y2="' + (CHART.H - CHART.padB) + '" stroke="var(--ink-muted)" stroke-width="1"/></g>');
+
+    svg.innerHTML = parts.join("");
+    svg._scales = sc;
+
+    const hit = document.getElementById("chart-hit");
+    hit.addEventListener("pointermove", function (evt) { onChartHover(run, sc, evt); });
+    hit.addEventListener("pointerleave", function () { hideCrosshair(); });
+  }
+
+  function renderChartDynamic(run, frame) {
+    const sc = els.chart._scales;
+    if (!sc) return;
+    const g = document.getElementById("chart-dynamic");
+    if (!g) return;
+    const px = sc.x(frame.tick).toFixed(1);
+    g.innerHTML =
+      '<line x1="' + px + '" x2="' + px + '" y1="' + CHART.padT + '" y2="' + (CHART.H - CHART.padB) + '" stroke="var(--ink)" stroke-opacity="0.15" stroke-width="1.5"/>' +
+      '<circle cx="' + px + '" cy="' + sc.y(frame.active).toFixed(1) + '" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="2"/>' +
+      '<circle cx="' + px + '" cy="' + sc.y(frame.ready).toFixed(1) + '" r="4" fill="var(--orange)" stroke="var(--surface)" stroke-width="2"/>';
+  }
+
+  function onChartHover(run, sc, evt) {
+    const svg = els.chart;
+    const rect = svg.getBoundingClientRect();
+    const scaleX = CHART.W / rect.width;
+    const localX = (evt.clientX - rect.left) * scaleX;
+    let tick = Math.round(((localX - CHART.padL) / (CHART.W - CHART.padL - CHART.padR)) * sc.n);
+    tick = Math.max(0, Math.min(sc.n, tick));
+    const frame = run.frames[tick];
+    if (!frame) return;
+
+    const crosshairLine = document.getElementById("crosshair-line");
+    const group = document.getElementById("chart-crosshair");
+    group.style.display = "";
+    crosshairLine.setAttribute("x1", sc.x(tick)); crosshairLine.setAttribute("x2", sc.x(tick));
+
+    const tip = els.crosshairTip;
+    tip.innerHTML =
+      '<div class="row"><b>tick ' + frame.tick + '</b></div>' +
+      '<div class="row"><span>active</span><span class="mono">' + frame.active + '</span></div>' +
+      '<div class="row"><span>ready</span><span class="mono">' + frame.ready + '</span></div>';
+    tip.classList.add("show");
+    const wrapRect = svg.parentElement.getBoundingClientRect();
+    const px = (sc.x(tick) / CHART.W) * rect.width;
+    let left = px + 14;
+    if (left + 140 > wrapRect.width) left = px - 154;
+    tip.style.left = left + "px";
+    tip.style.top = "6px";
+  }
+  function hideCrosshair() {
+    els.crosshairTip.classList.remove("show");
+    const group = document.getElementById("chart-crosshair");
+    if (group) group.style.display = "none";
+  }
+
+  function renderTable(run) {
+    els.tableBody.innerHTML = run.frames.map(function (f) {
+      return "<tr><td>" + f.statusBefore + "</td><td>" + f.tick + "</td><td>" + f.active + "</td><td>" + f.ready + "</td></tr>";
+    }).join("");
+  }
+
+  function actionsHtml(frame) {
+    if (!frame.actions.length) return frame.tick === 0 ? "initial state" : "—";
+    return frame.actions.map(function (a) {
+      return a.type === ActionType.CREATE
+        ? '<span class="create">+ create ' + a.version + '</span>'
+        : '<span class="terminate">− terminate #' + a.instanceId + '</span>';
+    }).join(", ") + (frame.newlyFailed ? ' <span class="warn">⚠ ' + frame.newlyFailed + ' failed health check</span>' : "");
+  }
+
+  function renderLog(run, currentIndex) {
+    els.logList.innerHTML = run.frames.map(function (f, idx) {
+      return '<div class="log-row' + (idx === currentIndex ? " current" : "") + '" data-idx="' + idx + '">' +
+        '<span class="t mono">t' + String(f.tick).padStart(2, "0") + '</span>' +
+        '<span class="s">' + f.statusBefore.replace("_", " ") + '</span>' +
+        '<span class="a">' + actionsHtml(f) + '</span></div>';
+    }).join("");
+    const current = els.logList.querySelector('[data-idx="' + currentIndex + '"]');
+    if (current) current.scrollIntoView({ block: "nearest" });
+  }
+
+  function renderFrame() {
+    const run = state.run, frame = run.frames[state.index];
+    renderStatus(frame);
+    renderLane(els.v1Slots, els.v1Summary, frame.instances, run.engine.oldVersion, run.config.desiredReplicas);
+    renderLane(els.v2Slots, els.v2Summary, frame.instances, run.engine.newVersion, run.config.desiredReplicas);
+    renderRules(run, frame);
+    renderChartDynamic(run, frame);
+    renderLog(run, state.index);
+    els.scrubber.value = String(state.index);
+
+    const settled = frame.statusAfter === RolloutStatus.COMPLETE || frame.statusAfter === RolloutStatus.ROLLED_BACK;
+    if (settled && state.index === run.frames.length - 1) stopPlaying();
+    els.btnBack.disabled = state.index === 0;
+    els.btnFwd.disabled = state.index === run.frames.length - 1;
+  }
+
+  function loadScenario(key) {
+    state.scenarioKey = key;
+    state.run = SCENARIOS[key].build();
+    state.index = 0;
+    els.v1Tag.textContent = state.run.engine.oldVersion;
+    els.v2Tag.textContent = state.run.engine.newVersion;
+    renderChips(state.run.config);
+    els.scrubber.max = String(state.run.frames.length - 1);
+    els.tickMax.textContent = "/ " + String(state.run.frames.length - 1).padStart(2, "0");
+    renderChartStatic(state.run);
+    renderTable(state.run);
+    stopPlaying();
+    renderFrame();
+    document.querySelectorAll(".tab").forEach(function (t) {
+      const active = t.getAttribute("data-scenario") === key;
+      t.classList.toggle("active", active);
+      t.setAttribute("aria-selected", String(active));
+    });
+  }
+
+  function stepTo(idx) {
+    state.index = Math.max(0, Math.min(state.run.frames.length - 1, idx));
+    renderFrame();
+  }
+
+  function startPlaying() {
+    if (state.index >= state.run.frames.length - 1) state.index = 0;
+    state.playing = true;
+    els.iconPlay.style.display = "none"; els.iconPause.style.display = ""; els.playLabel.textContent = "Pause";
+    state.timer = setInterval(function () {
+      if (state.index >= state.run.frames.length - 1) { stopPlaying(); return; }
+      state.index++;
+      renderFrame();
+    }, 850);
+  }
+  function stopPlaying() {
+    state.playing = false;
+    clearInterval(state.timer);
+    els.iconPlay.style.display = ""; els.iconPause.style.display = "none"; els.playLabel.textContent = "Play";
+  }
+
+  document.querySelectorAll(".tab").forEach(function (tab) {
+    tab.addEventListener("click", function () { loadScenario(tab.getAttribute("data-scenario")); });
+  });
+  els.btnPlay.addEventListener("click", function () { state.playing ? stopPlaying() : startPlaying(); });
+  els.btnBack.addEventListener("click", function () { stopPlaying(); stepTo(state.index - 1); });
+  els.btnFwd.addEventListener("click", function () { stopPlaying(); stepTo(state.index + 1); });
+  els.btnReset.addEventListener("click", function () { stopPlaying(); stepTo(0); });
+  els.scrubber.addEventListener("input", function () { stopPlaying(); stepTo(parseInt(els.scrubber.value, 10)); });
+
+  // Deep-link support (?scenario=unhealthy&tick=3) — used for screenshots/sharing a specific moment.
+  const params = new URLSearchParams(location.search);
+  loadScenario(params.get("scenario") === "unhealthy" ? "unhealthy" : "healthy");
+  const deepLinkTick = parseInt(params.get("tick"), 10);
+  if (!isNaN(deepLinkTick)) stepTo(deepLinkTick);
+})();
+</script>
