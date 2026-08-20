@@ -1,3 +1,9 @@
+# Rolling Update Simulator
+
+<!-- repository-summary -->
+A Python simulator and interactive showcase for safe rolling deployments under capacity, availability, and resource constraints.
+<!-- /repository-summary -->
+
 Coding Exercise – Rolling Update Simulator
 Implement a simulator for performing a rolling update of an application.
 
