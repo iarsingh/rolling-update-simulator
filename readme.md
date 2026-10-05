@@ -1,5 +1,45 @@
 # Rolling Update Simulator
 
+<!-- project-guide:start -->
+## Project guide
+
+[Project architecture](PROJECT_ARCHITECTURE.md) · [Interview questions and answers](INTERVIEW_QA.md)
+
+Use the architecture document for the component diagram, implementation boundaries, and verification entry points. The interview guide includes source-backed answers and project walkthroughs.
+
+### Implementation map
+
+| Component | Responsibility |
+| --- | --- |
+| [`rolling_update_simulator/service/app.py`](rolling_update_simulator/service/app.py) | HTTP handlers: `POST /rollouts`, `GET /rollouts`, `GET /rollouts/{rollout_id}`, `DELETE /rollouts/{rollout_id}`, `POST /rollouts/{rollout_id}/tick` |
+| [`rolling_update_simulator/cluster.py`](rolling_update_simulator/cluster.py) | Functions: `always_healthy`, `apply`, `tick`, `active_count`, `ready_count`, `_find` |
+| [`rolling_update_simulator/engine.py`](rolling_update_simulator/engine.py) | Functions: `__post_init__`, `min_available`, `max_active`, `__init__`, `config`, `record_failure`, `plan` |
+| [`rolling_update_simulator/simulator.py`](rolling_update_simulator/simulator.py) | Functions: `run`, `_report`, `_seed`, `_demo_healthy_rollout`, `_demo_failing_new_version` |
+| [`k8s-sanity-check/locustfile.py`](k8s-sanity-check/locustfile.py) | Functions: `label_for`, `hit_root` |
+| [`rollout-architecture.html`](rollout-architecture.html) | Implementation or supporting configuration |
+| [`rollout-simulator.html`](rollout-simulator.html) | Implementation or supporting configuration |
+| [`requirements.txt`](requirements.txt) | Implementation or supporting configuration |
+| [`k8s-sanity-check/loadtest-with-rollout.sh`](k8s-sanity-check/loadtest-with-rollout.sh) | Implementation or supporting configuration |
+| [`k8s-sanity-check/loadtest.sh`](k8s-sanity-check/loadtest.sh) | Implementation or supporting configuration |
+| [`rolling_update_simulator/__init__.py`](rolling_update_simulator/__init__.py) | Implementation or supporting configuration |
+| [`rolling_update_simulator/models.py`](rolling_update_simulator/models.py) | Functions: `is_active`, `is_ready`, `__str__` |
+| [`tests/__init__.py`](tests/__init__.py) | Executable checks and regression examples |
+| [`tests/test_engine.py`](tests/test_engine.py) | Executable checks and regression examples |
+| [`readme.md`](readme.md) | Project explanations or operating notes |
+| [`rolling_update_simulator/service/README.md`](rolling_update_simulator/service/README.md) | Project explanations or operating notes |
+
+### Local setup and verification
+
+From the repository root (the commands follow the checked-in manifests):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+<!-- project-guide:end -->
+
 <!-- repository-summary -->
 A Python simulator and interactive showcase for safe rolling deployments under capacity, availability, and resource constraints.
 <!-- /repository-summary -->
