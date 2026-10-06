@@ -119,3 +119,11 @@ max_unavailable=1` used in the simulator's demo, then rolled from `nginx:1.25-al
 `nginx:1.27-alpine`. Observed pod counts matched the simulator's invariants throughout: total
 pods peaked at 5 (`desired + max_surge`) and ready pods never dropped below 3
 (`desired - max_unavailable`).
+
+## Documentation checks
+
+Project architecture, interview guides, and local source links are checked automatically on pushes and pull requests. Run the same check locally:
+
+```bash
+python3 .github/scripts/validate_project_docs.py
+```
